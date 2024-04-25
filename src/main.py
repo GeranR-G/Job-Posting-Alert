@@ -1,9 +1,12 @@
-import smtplib, ssl, config, mapping
+import smtplib, ssl, config, mapping, sys
 from datetime import datetime, date, timedelta
 from openpyxl import load_workbook
 from classes import Posting
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from config import ConfigSetting
+
+CONFIGSETTINGS = ConfigSetting()
 
 def main():
     today = date.today()
@@ -14,45 +17,46 @@ def main():
     
 def get_jobs(): #creates a list of job posting objects
     jobs = []
-    sheet = load_workbook(filename=config.file_path, read_only=True).active
+    print(CONFIGSETTINGS.file_path)
+    sheet = load_workbook(filename=CONFIGSETTINGS.file_path, read_only=True).active
     for row in sheet.iter_rows(min_row=2, values_only=True):
         if row[0] is not None:
             job = Posting(employer=row[mapping.EMPLOYER],
                         job= row[mapping.JOB],
                         url= row[mapping.URL],
-                        date_posted= datetime.strptime(row[mapping.POSTING_DATE], config.date_format).date(),
-                        expiry_date= datetime.strptime(row[mapping.EXPIRY_DATE], config.date_format).date())
+                        date_posted= datetime.strptime(row[mapping.POSTING_DATE], "%Y-%m-%d").date(),
+                        expiry_date= datetime.strptime(row[mapping.EXPIRY_DATE], "%Y-%m-%d").date())
             jobs.append(job)
     return jobs
 
-def adjust_for_weekends(date: date): #adjusts the date if it lands on a weekend
+def adjust_for_weekends(date): #adjusts the date if it lands on a weekend
     if date.weekday() == 5:
         return date - timedelta(days=1)
     elif date.weekday() == 6:
         return date - timedelta(days=2)
     return date
 
-def add_days(date: date, modifier): #adds days to a given date
+def add_days(date, modifier): #adds days to a given date
     return date + timedelta(days=modifier)
 
-def check_for_snapshot_bool(job: Posting, today: date): #checks if a snapshot needs to be taken
-    snapshot_date = adjust_for_weekends(add_days(job.date_posted, config.snapshot_days))
-    return snapshot_date >= today and snapshot_date <= add_days(today, config.alert_days)
+def check_for_snapshot_bool(job, today): #checks if a snapshot needs to be taken
+    snapshot_date = adjust_for_weekends(add_days(job.date_posted, CONFIGSETTINGS.snapshot_days))
+    return snapshot_date >= today and snapshot_date <= add_days(today, CONFIGSETTINGS.alert_days)
 
-def check_for_expiry_bool(job: Posting, today: date): #checks if the posting is about to expire
+def check_for_expiry_bool(job, today): #checks if the posting is about to expire
     expiry_date = adjust_for_weekends(job.expiry_date)
-    return expiry_date >= today and expiry_date <= add_days(today, config.alert_days)
+    return expiry_date >= today and expiry_date <= add_days(today, CONFIGSETTINGS.alert_days)
 
-def add_actions(job: Posting, today: date):
+def add_actions(job, today):
     message = ""
     if check_for_snapshot_bool(job, today):
-        message += f"\n- The {job.job} posting needs a {config.snapshot_days} day snapshot taken on {adjust_for_weekends(add_days(job.date_posted, config.snapshot_days))},  url: {job.url}"
+        message += f"\n- The {job.job} posting needs a {CONFIGSETTINGS.snapshot_days} day snapshot taken on {adjust_for_weekends(add_days(job.date_posted, config.snapshot_days))},  url: {job.url}"
     if check_for_expiry_bool(job, today):
         message += f"\n- The {job.job} posting will expire on {job.expiry_date} and the last day to renew it is {adjust_for_weekends(job.expiry_date)}, url: {job.url}"
     return message
 
     
-def compose_message(jobs: list, today: date):
+def compose_message(jobs, today):
     old_employer = ""
     message = ""
     for job in jobs:
@@ -75,13 +79,13 @@ def send_message(message_text):
     password = input("Type your password and press enter: ")
     message = MIMEMultipart("alternative")
     message["Subject"] = "Job post(s) need attention"
-    message["From"] = config.your_gmail
+    message["From"] = CONFIGSETTINGS.your_gmail
     text = MIMEText(message_text, "plain")
     message.attach(text)
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL(smpt_server, port, context=context) as server:
-        server.login(config.your_gmail, password)
-        for email in config.email_list:
-            server.sendmail(config.your_gmail, email, message.as_string())
+        server.login(CONFIGSETTINGS.your_gmail, password)
+        for email in CONFIGSETTINGS.email_list:
+            server.sendmail(CONFIGSETTINGS.your_gmail, email, message.as_string())
 
 main()
