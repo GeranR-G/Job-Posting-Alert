@@ -85,6 +85,7 @@ def send_message(message_text):
     context = ssl.create_default_context()
     with smtplib.SMTP_SSL(smpt_server, port, context=context) as server:
         server.login(CONFIGSETTINGS.your_gmail, password)
+        server.sendmail(CONFIGSETTINGS.your_gmail, CONFIGSETTINGS.your_gmail, message.as_string())
         for email in CONFIGSETTINGS.email_list:
             server.sendmail(CONFIGSETTINGS.your_gmail, email, message.as_string())
 
