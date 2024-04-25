@@ -1,23 +1,23 @@
+import config, mapping
 from datetime import datetime, date, timedelta
 from openpyxl import load_workbook
 from classes import Posting
-from mapping import EMPLOYER, JOB, URL, POSTING_DATE, EXPIRY_DATE
-from config import email_list, alert_days, snapshot_days, file_path, date_format
 
 def main():
     today = date.today()
     jobs = get_jobs()
+    message = compose_message(jobs, today)
     
 def get_jobs(): #creates a list of job posting objects
     jobs = []
-    sheet = load_workbook(filename=file_path, read_only=True).active
+    sheet = load_workbook(filename=config.file_path, read_only=True).active
     for row in sheet.iter_rows(min_row=2, values_only=True):
         if row[0] is not None:
-            job = Posting(employer=row[EMPLOYER],
-                        job= row[JOB],
-                        url= row[URL],
-                        date_posted= datetime.strptime(row[POSTING_DATE], date_format).date(),
-                        expiry_date= datetime.strptime(row[EXPIRY_DATE], date_format).date())
+            job = Posting(employer=row[mapping.EMPLOYER],
+                        job= row[mapping.JOB],
+                        url= row[mapping.URL],
+                        date_posted= datetime.strptime(row[mapping.POSTING_DATE], config.date_format).date(),
+                        expiry_date= datetime.strptime(row[mapping.EXPIRY_DATE], config.date_format).date())
             jobs.append(job)
     return jobs
 
@@ -27,5 +27,42 @@ def adjust_for_weekends(date: date): #adjusts the date if it lands on a weekend
     elif date.weekday() == 6:
         return date - timedelta(days=2)
     return date
+
+def add_days(date: date, modifier): #adds days to a given date
+    return date + timedelta(days=modifier)
+
+def check_for_snapshot_bool(job: Posting, today: date): #checks if a snapshot needs to be taken
+    snapshot_date = adjust_for_weekends(add_days(job.date_posted, config.snapshot_days))
+    return snapshot_date >= today and snapshot_date <= add_days(today, config.alert_days)
+
+def check_for_expiry_bool(job: Posting, today: date): #checks if the posting is about to expire
+    expiry_date = adjust_for_weekends(job.expiry_date)
+    return expiry_date >= today and expiry_date <= add_days(today, config.alert_days)
+
+def add_actions(job: Posting, today: date):
+    message = ""
+    if check_for_snapshot_bool(job, today):
+        message += f"\n- The {job.job} posting needs a {config.snapshot_days} day snapshot taken on {adjust_for_weekends(add_days(job.date_posted, config.snapshot_days))},  url: {job.url}"
+    if check_for_expiry_bool(job, today):
+        message += f"\n- The {job.job} posting will expire on {job.expiry_date} and the last day to renew it is {adjust_for_weekends(job.expiry_date)}, url: {job.url}"
+    return message
+
+    
+def compose_message(jobs: list, today: date):
+    old_employer = ""
+    message = ""
+    for job in jobs:
+        action_needed = check_for_expiry_bool(job, today) or check_for_snapshot_bool(job, today)
+        if message == "" and action_needed:
+            message = f"Job(s) for {job.employer} need the following update(s): "
+            old_employer = job.employer
+            message += add_actions(job, today)
+        elif old_employer == job.employer and action_needed:
+            message += add_actions(job, today)
+        elif old_employer != job.employer and action_needed:
+            message += f"\nJob(s) for {job.employer} need the following update(s): "
+            old_employer = job.employer
+            message += add_actions(job, today)
+    return message
 
 main()
