@@ -1,12 +1,16 @@
-import config, mapping
+import smtplib, ssl, config, mapping
 from datetime import datetime, date, timedelta
 from openpyxl import load_workbook
 from classes import Posting
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 
 def main():
     today = date.today()
     jobs = get_jobs()
     message = compose_message(jobs, today)
+    if len(message) != 0:
+        send_message(message)
     
 def get_jobs(): #creates a list of job posting objects
     jobs = []
@@ -64,5 +68,20 @@ def compose_message(jobs: list, today: date):
             old_employer = job.employer
             message += add_actions(job, today)
     return message
+
+def send_message(message_text):
+    port = 465
+    smpt_server = "smtp.gmail.com"
+    password = input("Type your password and press enter: ")
+    message = MIMEMultipart("alternative")
+    message["Subject"] = "Job post(s) need attention"
+    message["From"] = config.your_gmail
+    text = MIMEText(message_text, "plain")
+    message.attach(text)
+    context = ssl.create_default_context()
+    with smtplib.SMTP_SSL(smpt_server, port, context=context) as server:
+        server.login(config.your_gmail, password)
+        for email in config.email_list:
+            server.sendmail(config.your_gmail, email, message.as_string())
 
 main()

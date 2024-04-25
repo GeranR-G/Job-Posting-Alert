@@ -1,5 +1,7 @@
+#your gmail account password: sqar luap sjvv mpyp
+your_gmail = "codetestingtest@gmail.com"
 #add any emails you want the alerts to be sent to
-email_list = []
+email_list = ["codetestingtest@gmail.com"]
 #number of days before any action must be taken you want an alert to be created
 alert_days = 5
 #how many days after the original posting you want to tak a snapshot on
