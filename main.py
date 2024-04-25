@@ -1,5 +1,4 @@
-from datetime import datetime
-from datetime import date
+from datetime import datetime, date, timedelta
 from openpyxl import load_workbook
 from classes import Posting
 from mapping import EMPLOYER, JOB, URL, POSTING_DATE, EXPIRY_DATE
@@ -24,5 +23,9 @@ def get_jobs(): #creates a list of job posting objects
 
 def adjust_for_weekends(date: date): #adjusts the date if it lands on a weekend
     if date.weekday() == 5:
-        return date - datetime.timedelta(days=1)
+        return date - timedelta(days=1)
+    elif date.weekday() == 6:
+        return date - timedelta(days=2)
+    return date
+
 main()
